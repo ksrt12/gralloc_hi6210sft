@@ -17,6 +17,8 @@
 #ifndef GRALLOC_VSYNC_REPORT_H_
 #define GRALLOC_VSYNC_REPORT_H_
 
+#include "gralloc_helper.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

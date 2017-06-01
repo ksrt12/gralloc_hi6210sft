@@ -25,6 +25,7 @@
 #include <hardware/gralloc.h>
 
 #include "gralloc_priv.h"
+#include "gralloc_helper.h"
 #include "alloc_device.h"
 #include "framebuffer_device.h"
 
@@ -41,7 +42,7 @@ static int s_ump_is_open = 0;
 
 static pthread_mutex_t s_map_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static int gralloc_device_open(const hw_module_t *module, const char *name, hw_device_t **device)
+static int gralloc_device_open(const hw_module_t* module, const char* name, hw_device_t** device)
 {
 	int status = -EINVAL;
 
@@ -57,16 +58,18 @@ static int gralloc_device_open(const hw_module_t *module, const char *name, hw_d
 	return status;
 }
 
-static int gralloc_register_buffer(gralloc_module_t const *module, buffer_handle_t handle)
+static int gralloc_register_buffer(gralloc_module_t const* module, buffer_handle_t handle)
 {
+	GRALLOC_UNUSED(module);
+
 	if (private_handle_t::validate(handle) < 0)
 	{
-		AERR("Registering invalid buffer 0x%x, returning error", handle);
+		AERR("Registering invalid buffer %p, returning error", handle);
 		return -EINVAL;
 	}
 
 	// if this handle was created in this process, then we keep it as is.
-	private_handle_t *hnd = (private_handle_t *)handle;
+	private_handle_t* hnd = (private_handle_t*)handle;
 
 	int retval = -EINVAL;
 
@@ -92,9 +95,9 @@ static int gralloc_register_buffer(gralloc_module_t const *module, buffer_handle
 
 	hnd->pid = getpid();
 
-	if (hnd->flags & private_handle_t::PRIV_FLAGS_FRAMEBUFFER)
+	if (hnd->flags & private_handle_t::PRIV_FLAGS_FRAMEBUFFER) 
 	{
-		AERR("Can't register buffer 0x%x as it is a framebuffer", handle);
+		AERR( "Can't register buffer %p as it is a framebuffer", handle );
 	}
 	else if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_UMP)
 	{
@@ -116,18 +119,18 @@ static int gralloc_register_buffer(gralloc_module_t const *module, buffer_handle
 			}
 			else
 			{
-				AERR("Failed to map UMP handle 0x%x", hnd->ump_mem_handle);
+				AERR("Failed to map UMP handle %p", hnd->ump_mem_handle);
 			}
 
 			ump_reference_release((ump_handle)hnd->ump_mem_handle);
 		}
 		else
 		{
-			AERR("Failed to create UMP handle 0x%x", hnd->ump_mem_handle);
+			AERR("Failed to create UMP handle %p", hnd->ump_mem_handle);
 		}
 
 #else
-		AERR("Gralloc does not support UMP. Unable to register UMP memory for handle 0x%x", hnd);
+		AERR("Gralloc does not support UMP. Unable to register UMP memory for handle %p", hnd);
 #endif
 	}
 	else if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
@@ -145,7 +148,7 @@ static int gralloc_register_buffer(gralloc_module_t const *module, buffer_handle
 		}
 		else
 		{
-			AERR("Could not get gralloc module for handle: 0x%x", hnd);
+			AERR("Could not get gralloc module for handle: %p", hnd);
 			retval = -errno;
 			goto cleanup;
 		}
@@ -161,7 +164,7 @@ static int gralloc_register_buffer(gralloc_module_t const *module, buffer_handle
 
 			if (m->ion_client < 0)
 			{
-				AERR("Could not open ion device for handle: 0x%x", hnd);
+				AERR("Could not open ion device for handle: %p", hnd);
 				retval = -errno;
 				goto cleanup;
 			}
@@ -183,7 +186,7 @@ static int gralloc_register_buffer(gralloc_module_t const *module, buffer_handle
 	}
 	else
 	{
-		AERR("registering non-UMP buffer not supported. flags = %d", hnd->flags);
+		AERR("unknown buffer flags not supported. flags = %d", hnd->flags );
 	}
 
 cleanup:
@@ -191,45 +194,47 @@ cleanup:
 	return retval;
 }
 
-static int gralloc_unregister_buffer(gralloc_module_t const *module, buffer_handle_t handle)
+static int gralloc_unregister_buffer(gralloc_module_t const* module, buffer_handle_t handle)
 {
+    GRALLOC_UNUSED(module);
+
 	if (private_handle_t::validate(handle) < 0)
 	{
-		AERR("unregistering invalid buffer 0x%x, returning error", handle);
+		AERR("unregistering invalid buffer %p, returning error", handle);
 		return -EINVAL;
 	}
 
-	private_handle_t *hnd = (private_handle_t *)handle;
+	private_handle_t* hnd = (private_handle_t*)handle;
 
 	AERR_IF(hnd->lockState & private_handle_t::LOCK_STATE_READ_MASK, "[unregister] handle %p still locked (state=%08x)", hnd, hnd->lockState);
 
 	if (hnd->flags & private_handle_t::PRIV_FLAGS_FRAMEBUFFER)
 	{
-		AERR("Can't unregister buffer 0x%x as it is a framebuffer", handle);
+		AERR( "Can't unregister buffer %p as it is a framebuffer", handle );
 	}
 	else if (hnd->pid == getpid()) // never unmap buffers that were not registered in this process
 	{
 		pthread_mutex_lock(&s_map_lock);
 
-		if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_UMP)
+		if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
 		{
 #if GRALLOC_ARM_UMP_MODULE
 			ump_mapped_pointer_release((ump_handle)hnd->ump_mem_handle);
 			ump_reference_release((ump_handle)hnd->ump_mem_handle);
 			hnd->ump_mem_handle = (int)UMP_INVALID_MEMORY_HANDLE;
 #else
-			AERR("Can't unregister UMP buffer for handle 0x%x. Not supported", handle);
+			AERR("Can't unregister UMP buffer for handle %p. Not supported", handle);
 #endif
 		}
 		else if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
 		{
 #if GRALLOC_ARM_DMA_BUF_MODULE
-			void *base = (void *)hnd->base;
+			void *base = (void*)hnd->base;
 			size_t size = hnd->size;
 
 			if (munmap(base, size) < 0)
 			{
-				AERR("Could not munmap base:0x%x size:%d '%s'", base, size, strerror(errno));
+				AERR("Could not munmap base:%p size:%d '%s'", base, size, strerror(errno));
 			}
 
 #else
@@ -256,38 +261,46 @@ static int gralloc_unregister_buffer(gralloc_module_t const *module, buffer_hand
 	return 0;
 }
 
-static int gralloc_lock(gralloc_module_t const *module, buffer_handle_t handle, int usage, int l, int t, int w, int h, void **vaddr)
+static int gralloc_lock(gralloc_module_t const* module, buffer_handle_t handle, int usage, int l, int t, int w, int h, void** vaddr)
 {
+	GRALLOC_UNUSED(module);
+	GRALLOC_UNUSED(l);
+	GRALLOC_UNUSED(t);
+	GRALLOC_UNUSED(w);
+	GRALLOC_UNUSED(h);
+
 	if (private_handle_t::validate(handle) < 0)
 	{
-		AERR("Locking invalid buffer 0x%x, returning error", handle);
+		AERR("Locking invalid buffer %p, returning error", handle );
 		return -EINVAL;
 	}
 
-	private_handle_t *hnd = (private_handle_t *)handle;
+	private_handle_t* hnd = (private_handle_t*)handle;
 
-	if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_UMP || hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
+	if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
 	{
 		hnd->writeOwner = usage & GRALLOC_USAGE_SW_WRITE_MASK;
 	}
 
 	if (usage & (GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK))
 	{
-		*vaddr = (void *)hnd->base;
+		*vaddr = (void*)hnd->base;
 	}
 
 	return 0;
 }
 
-static int gralloc_unlock(gralloc_module_t const *module, buffer_handle_t handle)
-{
+static int gralloc_unlock(gralloc_module_t const* module, buffer_handle_t handle)
+ {
+	GRALLOC_UNUSED(module);
+
 	if (private_handle_t::validate(handle) < 0)
 	{
-		AERR("Unlocking invalid buffer 0x%x, returning error", handle);
+		AERR("Unlocking invalid buffer %p, returning error", handle);
 		return -EINVAL;
 	}
 
-	private_handle_t *hnd = (private_handle_t *)handle;
+	private_handle_t* hnd = (private_handle_t*)handle;
 	int32_t current_value;
 	int32_t new_value;
 	int retry;
@@ -297,23 +310,23 @@ static int gralloc_unlock(gralloc_module_t const *module, buffer_handle_t handle
 #if GRALLOC_ARM_UMP_MODULE
 		ump_cpu_msync_now((ump_handle)hnd->ump_mem_handle, UMP_MSYNC_CLEAN_AND_INVALIDATE, (void*)hnd->base, hnd->size);
 #else
-		AERR("Buffer 0x%x is UMP type but it is not supported", hnd);
+		AERR("Buffer %p is UMP type but it is not supported", hnd);
 #endif
 	}
 	else if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION && hnd->writeOwner)
 	{
 #if GRALLOC_ARM_DMA_BUF_MODULE
-		hw_module_t *pmodule = NULL;
-		private_module_t *m = NULL;
+		hw_module_t* pmodule = NULL;
+		private_module_t* m = NULL;
 
-		if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID, (const hw_module_t **)&pmodule) == 0)
+		if (hw_get_module(GRALLOC_HARDWARE_MODULE_ID, (const hw_module_t**)&pmodule) == 0)
 		{
-			m = reinterpret_cast<private_module_t *>(pmodule);
+			m = reinterpret_cast<private_module_t*>(pmodule);
 			ion_sync_fd(m->ion_client, hnd->share_fd);
 		}
 		else
 		{
-			AERR("Couldnot get gralloc module for handle 0x%x\n", handle);
+			AERR("Couldnot get gralloc module for handle %p\n", handle);
 		}
 
 #endif

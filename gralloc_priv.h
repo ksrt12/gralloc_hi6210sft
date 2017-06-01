@@ -31,11 +31,6 @@
 #include <alloc_device.h>
 #include <utils/Log.h>
 
-#ifdef MALI_600
-#define GRALLOC_ARM_UMP_MODULE 0
-#define GRALLOC_ARM_DMA_BUF_MODULE 1
-#else
-
 /* NOTE:
  * If your framebuffer device driver is integrated with UMP, you will have to
  * change this IOCTL definition to reflect your integration with the framebuffer
@@ -63,9 +58,6 @@ struct fb_dmabuf_export
 /*#define FBIOGET_DMABUF    _IOR('F', 0x21, struct fb_dmabuf_export)*/
 #endif /* GRALLOC_ARM_DMA_BUF_MODULE */
 
-
-#endif
-
 /* the max string size of GRALLOC_HARDWARE_GPU0 & GRALLOC_HARDWARE_FB0
  * 8 is big enough for "gpu0" & "fb0" currently
  */
@@ -91,7 +83,7 @@ struct private_module_t
 {
 	gralloc_module_t base;
 
-	private_handle_t *framebuffer;
+	struct private_handle_t* framebuffer;
 	uint32_t flags;
 	uint32_t numBuffers;
 	uint32_t bufferMask;
@@ -196,7 +188,7 @@ struct private_handle_t
 	static const int sMagic = 0x3141592;
 
 #if GRALLOC_ARM_UMP_MODULE
-	private_handle_t(int flags, int usage, int size, int base, int lock_state, ump_secure_id secure_id, ump_handle handle):
+	private_handle_t(int _flags, int usage, int size, void *base, int lock_state, ump_secure_id secure_id, ump_handle handle):
 #if GRALLOC_ARM_DMA_BUF_MODULE
 		share_fd(-1),
 #endif
@@ -305,23 +297,21 @@ struct private_handle_t
 		return (flags & PRIV_FLAGS_FRAMEBUFFER) ? true : false;
 	}
 
-	static int validate(const native_handle *h)
+	static int validate(const native_handle* h)
 	{
-		const private_handle_t *hnd = (const private_handle_t *)h;
-
+		const private_handle_t* hnd = (const private_handle_t*)h;
 		if (!h || h->version != sizeof(native_handle) || h->numInts != sNumInts || h->numFds != sNumFds || hnd->magic != sMagic)
-		{
-			return -EINVAL;
-		}
-
+ 		{
+ 			return -EINVAL;
+ 		}
 		return 0;
 	}
 
-	static private_handle_t *dynamicCast(const native_handle *in)
+	static private_handle_t* dynamicCast(const native_handle* in)
 	{
 		if (validate(in) == 0)
 		{
-			return (private_handle_t *) in;
+			return (private_handle_t*) in;
 		}
 
 		return NULL;

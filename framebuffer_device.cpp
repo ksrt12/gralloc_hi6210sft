@@ -48,7 +48,7 @@ enum
 };
 
 
-static int fb_set_swap_interval(struct framebuffer_device_t *dev, int interval)
+static int fb_set_swap_interval(struct framebuffer_device_t* dev, int interval)
 {
 	if (interval < dev->minSwapInterval)
 	{
@@ -64,15 +64,15 @@ static int fb_set_swap_interval(struct framebuffer_device_t *dev, int interval)
 	return 0;
 }
 
-static int fb_post(struct framebuffer_device_t *dev, buffer_handle_t buffer)
+static int fb_post(struct framebuffer_device_t* dev, buffer_handle_t buffer)
 {
 	if (private_handle_t::validate(buffer) < 0)
 	{
 		return -EINVAL;
 	}
 
-	private_handle_t const *hnd = reinterpret_cast<private_handle_t const *>(buffer);
-	private_module_t *m = reinterpret_cast<private_module_t *>(dev->common.module);
+	private_handle_t const* hnd = reinterpret_cast<private_handle_t const*>(buffer);
+	private_module_t* m = reinterpret_cast<private_module_t*>(dev->common.module);
 
 	if (m->currentBuffer)
 	{
@@ -82,10 +82,10 @@ static int fb_post(struct framebuffer_device_t *dev, buffer_handle_t buffer)
 
 	if (hnd->flags & private_handle_t::PRIV_FLAGS_FRAMEBUFFER)
 	{
-		m->base.lock(&m->base, buffer, private_module_t::PRIV_USAGE_LOCKED_FOR_POST,
-		             0, 0, m->info.xres, m->info.yres, NULL);
-
-		const size_t offset = hnd->base - m->framebuffer->base;
+		m->base.lock(&m->base, buffer, private_module_t::PRIV_USAGE_LOCKED_FOR_POST, 
+				0, 0, m->info.xres, m->info.yres, NULL);
+ 
+		const size_t offset = (uintptr_t)hnd->base - (uintptr_t)m->framebuffer->base;
 		int interrupt;
 		m->info.activate = FB_ACTIVATE_VBL;
 		m->info.yoffset = offset / m->finfo.line_length;
@@ -96,9 +96,9 @@ static int fb_post(struct framebuffer_device_t *dev, buffer_handle_t buffer)
 
 		if (ioctl(m->framebuffer->fd, FBIOPAN_DISPLAY, &m->info) == -1)
 		{
-			AERR("FBIOPAN_DISPLAY failed for fd: %d", m->framebuffer->fd);
-			m->base.unlock(&m->base, buffer);
-			return 0;
+			AERR( "FBIOPAN_DISPLAY failed for fd: %d", m->framebuffer->fd );
+			m->base.unlock(&m->base, buffer); 
+			return -errno;
 		}
 
 		if (swapInterval == 1)
@@ -165,32 +165,52 @@ static int fb_post(struct framebuffer_device_t *dev, buffer_handle_t buffer)
 	}
 	else
 	{
-		void *fb_vaddr;
-		void *buffer_vaddr;
+		void* fb_vaddr;
+		void* buffer_vaddr;
 
-		m->base.lock(&m->base, m->framebuffer, GRALLOC_USAGE_SW_WRITE_RARELY,
-		             0, 0, m->info.xres, m->info.yres, &fb_vaddr);
+		m->base.lock(&m->base, m->framebuffer, GRALLOC_USAGE_SW_WRITE_RARELY, 
+				0, 0, m->info.xres, m->info.yres, &fb_vaddr);
 
-		m->base.lock(&m->base, buffer, GRALLOC_USAGE_SW_READ_RARELY,
-		             0, 0, m->info.xres, m->info.yres, &buffer_vaddr);
+		m->base.lock(&m->base, buffer, GRALLOC_USAGE_SW_READ_RARELY, 
+				0, 0, m->info.xres, m->info.yres, &buffer_vaddr);
 
-		memcpy(fb_vaddr, buffer_vaddr, m->finfo.line_length * m->info.yres);
+		// If buffer's alignment match framebuffer alignment we can do a direct copy.
+		// If not we must fallback to do an aligned copy of each line.
+		if ( hnd->byte_stride == (int)m->finfo.line_length )
+		{
+			memcpy(fb_vaddr, buffer_vaddr, m->finfo.line_length * m->info.yres);
+		}
+		else
+		{
+			uintptr_t fb_offset = 0;
+			uintptr_t buffer_offset = 0;
+			unsigned int i;
 
-		m->base.unlock(&m->base, buffer);
-		m->base.unlock(&m->base, m->framebuffer);
+			for (i = 0; i < m->info.yres; i++)
+			{
+				memcpy((void *)((uintptr_t)fb_vaddr + fb_offset),
+					   (void *)((uintptr_t)buffer_vaddr + buffer_offset),
+					   m->finfo.line_length);
+ 
+				fb_offset += m->finfo.line_length;
+				buffer_offset += hnd->byte_stride;
+			}
+		}
+		m->base.unlock(&m->base, buffer); 
+		m->base.unlock(&m->base, m->framebuffer); 
 	}
 
 	return 0;
 }
 
-int init_frame_buffer_locked(struct private_module_t *module)
+int init_frame_buffer_locked(struct private_module_t* module)
 {
 	if (module->framebuffer)
 	{
 		return 0; // Nothing to do, already initialized
 	}
 
-	char const *const device_template[] =
+	char const * const device_template[] =
 	{
 		"/dev/graphics/fb%u",
 		"/dev/fb%u",
@@ -273,7 +293,7 @@ int init_frame_buffer_locked(struct private_module_t *module)
 	{
 		info.yres_virtual = info.yres;
 		flags &= ~PAGE_FLIP;
-		AWAR("FBIOPUT_VSCREENINFO failed, page flipping not supported fd: %d", fd);
+		AWAR( "FBIOPUT_VSCREENINFO failed, page flipping not supported fd: %d", fd );
 	}
 
 	if (info.yres_virtual < info.yres * 2)
@@ -281,7 +301,7 @@ int init_frame_buffer_locked(struct private_module_t *module)
 		// we need at least 2 for page-flipping
 		info.yres_virtual = info.yres;
 		flags &= ~PAGE_FLIP;
-		AWAR("page flipping not supported (yres_virtual=%d, requested=%d)", info.yres_virtual, info.yres * 2);
+		AWAR( "page flipping not supported (yres_virtual=%d, requested=%d)", info.yres_virtual, info.yres*2 );
 	}
 
 	if (ioctl(fd, FBIOGET_VSCREENINFO, &info) == -1)
@@ -291,31 +311,31 @@ int init_frame_buffer_locked(struct private_module_t *module)
 
 	int refreshRate = 0;
 
-	if (info.pixclock > 0)
+	if ( info.pixclock > 0 )
 	{
 		refreshRate = 1000000000000000LLU /
-		              (
-		                  uint64_t(info.upper_margin + info.lower_margin + info.yres + info.hsync_len)
-		                  * (info.left_margin  + info.right_margin + info.xres + info.vsync_len)
-		                  * info.pixclock
-		              );
+		(
+			uint64_t( info.upper_margin + info.lower_margin + info.yres + info.hsync_len )
+			* ( info.left_margin  + info.right_margin + info.xres + info.vsync_len )
+			* info.pixclock
+		);
 	}
 	else
 	{
-		AWAR("fbdev pixclock is zero for fd: %d", fd);
+		AWAR( "fbdev pixclock is zero for fd: %d", fd );
 	}
 
 	if (refreshRate == 0)
 	{
-		refreshRate = 60 * 1000; // 60 Hz
+		refreshRate = 60*1000; // 60 Hz
 	}
 
 	if (int(info.width) <= 0 || int(info.height) <= 0)
 	{
 		// the driver doesn't return that information
 		// default to 160 dpi
-		info.width  = ((info.xres * 25.4f) / 160.0f + 0.5f);
-		info.height = ((info.yres * 25.4f) / 160.0f + 0.5f);
+		info.width  = ((info.xres * 25.4f)/160.0f + 0.5f);
+		info.height = ((info.yres * 25.4f)/160.0f + 0.5f);
 	}
 
 	float xdpi = (info.xres * 25.4f) / info.width;
@@ -370,20 +390,19 @@ int init_frame_buffer_locked(struct private_module_t *module)
 	/*
 	 * map the framebuffer
 	 */
-	size_t fbSize = round_up_to_page_size(finfo.line_length * info.yres_virtual);
-	void *vaddr = mmap(0, fbSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	void* vaddr = mmap(0, fbSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 
 	if (vaddr == MAP_FAILED)
 	{
-		AERR("Error mapping the framebuffer (%s)", strerror(errno));
+		AERR( "Error mapping the framebuffer (%s)", strerror(errno) );
 		return -errno;
 	}
 
 	memset(vaddr, 0, fbSize);
 
 	// Create a "fake" buffer object for the entire frame buffer memory, and store it in the module
-	module->framebuffer = new private_handle_t(private_handle_t::PRIV_FLAGS_FRAMEBUFFER, 0, fbSize, intptr_t(vaddr),
-	        0, dup(fd), 0);
++	module->framebuffer = new private_handle_t(private_handle_t::PRIV_FLAGS_FRAMEBUFFER, fbSize, vaddr,
++	                                           0, dup(fd), 0);
 
 	module->numBuffers = info.yres_virtual / info.yres;
 	module->bufferMask = 0;
@@ -403,7 +422,7 @@ int init_frame_buffer_locked(struct private_module_t *module)
 	return 0;
 }
 
-static int init_frame_buffer(struct private_module_t *module)
+static int init_frame_buffer(struct private_module_t* module)
 {
 	pthread_mutex_lock(&module->lock);
 	int err = init_frame_buffer_locked(module);
@@ -413,21 +432,22 @@ static int init_frame_buffer(struct private_module_t *module)
 
 static int fb_close(struct hw_device_t *device)
 {
-	framebuffer_device_t *dev = reinterpret_cast<framebuffer_device_t *>(device);
+	framebuffer_device_t* dev = reinterpret_cast<framebuffer_device_t*>(device);
 
 	if (dev)
 	{
 #if GRALLOC_ARM_UMP_MODULE
 		ump_close();
 #endif
-		delete dev;
+		free(dev);
 	}
 
 	return 0;
 }
 
-int compositionComplete(struct framebuffer_device_t *dev)
+int compositionComplete(struct framebuffer_device_t* dev)
 {
+	GRALLOC_UNUSED(dev);
 	/* By doing a finish here we force the GL driver to start rendering
 	   all the drawcalls up to this point, and to wait for the rendering to be complete.*/
 	glFinish();
@@ -445,11 +465,13 @@ int compositionComplete(struct framebuffer_device_t *dev)
 	return 0;
 }
 
-int framebuffer_device_open(hw_module_t const *module, const char *name, hw_device_t **device)
+int framebuffer_device_open(hw_module_t const* module, const char* name, hw_device_t** device)
 {
 	int status = -EINVAL;
 
-	alloc_device_t *gralloc_device;
+	GRALLOC_UNUSED(name)
+
+	alloc_device_t* gralloc_device;
 	status = gralloc_open(module, &gralloc_device);
 
 	if (status < 0)
@@ -457,23 +479,25 @@ int framebuffer_device_open(hw_module_t const *module, const char *name, hw_devi
 		return status;
 	}
 
-	private_module_t *m = (private_module_t *)module;
+	private_module_t* m = (private_module_t*)module;
 	status = init_frame_buffer(m);
 
-	if (status < 0)
+	framebuffer_device_t *dev =  reinterpret_cast<framebuffer_device_t*> (malloc(sizeof(framebuffer_device_t)));
+
+	/* if either or both of init_frame_buffer() and malloc failed */
+	if ((status < 0) || (!dev))
 	{
 		gralloc_close(gralloc_device);
+		(!dev)?	(void)(status = -ENOMEM) : free(dev);
 		return status;
 	}
 
-	/* initialize our state here */
-	framebuffer_device_t *dev = new framebuffer_device_t();
 	memset(dev, 0, sizeof(*dev));
 
 	/* initialize the procs */
 	dev->common.tag = HARDWARE_DEVICE_TAG;
 	dev->common.version = 0;
-	dev->common.module = const_cast<hw_module_t *>(module);
+	dev->common.module = const_cast<hw_module_t*>(module);
 	dev->common.close = fb_close;
 	dev->setSwapInterval = fb_set_swap_interval;
 	dev->post = fb_post;
@@ -481,22 +505,22 @@ int framebuffer_device_open(hw_module_t const *module, const char *name, hw_devi
 	dev->compositionComplete = &compositionComplete;
 
 	int stride = m->finfo.line_length / (m->info.bits_per_pixel >> 3);
-	const_cast<uint32_t &>(dev->flags) = 0;
-	const_cast<uint32_t &>(dev->width) = m->info.xres;
-	const_cast<uint32_t &>(dev->height) = m->info.yres;
-	const_cast<int &>(dev->stride) = stride;
+	const_cast<uint32_t&>(dev->flags) = 0;
+	const_cast<uint32_t&>(dev->width) = m->info.xres;
+	const_cast<uint32_t&>(dev->height) = m->info.yres;
+	const_cast<int&>(dev->stride) = stride;
 #ifdef GRALLOC_16_BITS
-	const_cast<int &>(dev->format) = HAL_PIXEL_FORMAT_RGB_565;
+	const_cast<int&>(dev->format) = HAL_PIXEL_FORMAT_RGB_565;
 #else
-	const_cast<int &>(dev->format) = HAL_PIXEL_FORMAT_BGRA_8888;
+	const_cast<int&>(dev->format) = HAL_PIXEL_FORMAT_BGRA_8888;
 #endif
-	const_cast<float &>(dev->xdpi) = m->xdpi;
-	const_cast<float &>(dev->ydpi) = m->ydpi;
-	const_cast<float &>(dev->fps) = m->fps;
-	const_cast<int &>(dev->minSwapInterval) = 0;
-	const_cast<int &>(dev->maxSwapInterval) = 1;
+	const_cast<float&>(dev->xdpi) = m->xdpi;
+	const_cast<float&>(dev->ydpi) = m->ydpi;
+	const_cast<float&>(dev->fps) = m->fps;
+	const_cast<int&>(dev->minSwapInterval) = 0;
+	const_cast<int&>(dev->maxSwapInterval) = 1;
 	*device = &dev->common;
-	status = 0;
+//	status = 0;
 
 	return status;
 }

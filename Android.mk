@@ -33,19 +33,6 @@ LOCAL_MODULE := gralloc.$(TARGET_BOARD_PLATFORM)
 endif
 LOCAL_MODULE_TAGS := optional
 
-# Which DDK are we building for?
-ifneq (,$(wildcard $(MALI_DDK_TEST_PATH)))
-# Mali-T6xx DDK
-MALI_DDK_PATH := vendor/arm/mali6xx
-LOCAL_SHARED_LIBRARIES := liblog libcutils libGLESv1_CM libion #libGLES_mali
-
-# All include files are accessed from the DDK root
-DDK_PATH := $(LOCAL_PATH)/../../..
-UMP_HEADERS_PATH := $(DDK_PATH)/kernel/include
-LOCAL_C_INCLUDES := $(DDK_PATH) $(UMP_HEADERS_PATH)
-
-LOCAL_CFLAGS := -DLOG_TAG=\"gralloc\" -DSTANDARD_LINUX_SCREEN -DMALI_600
-else
 # Mali-200/300/400MP DDK
 MALI_DDK_PATH := $(LOCAL_PATH)/..
 #SHARED_MEM_LIBS := libUMP
@@ -57,7 +44,6 @@ LOCAL_C_INCLUDES := system/core/include/ ../../../$(TARGET_KERNEL_SOURCE)/includ
 LOCAL_C_INCLUDES += $(MALI_DDK_PATH)/src/ump/include 
 
 LOCAL_CFLAGS := -DLOG_TAG=\"gralloc\" -DGRALLOC_32_BITS -DSTANDARD_LINUX_SCREEN -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
-endif
 
 LOCAL_SRC_FILES := \
 	gralloc_module.cpp \
