@@ -23,20 +23,16 @@
 #include <pthread.h>
 #include <errno.h>
 #include <linux/fb.h>
+#include <linux/ion.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include <hardware/gralloc.h>
 #include <cutils/native_handle.h>
-#include <alloc_device.h>
+#include "alloc_device.h"
 #include <utils/Log.h>
 
-/* NOTE:
- * If your framebuffer device driver is integrated with UMP, you will have to
- * change this IOCTL definition to reflect your integration with the framebuffer
- * device.
- * Expected return value is a UMP secure id backing your framebuffer device memory.
- */
+#include "gralloc_helper.h"
 
 /*#define IOCTL_GET_FB_UMP_SECURE_ID    _IOR('F', 311, unsigned int)*/
 #define GRALLOC_ARM_UMP_MODULE 0
@@ -118,15 +114,17 @@ struct private_handle_t
 
 	enum
 	{
-		PRIV_FLAGS_FRAMEBUFFER = 0x00000001,
-		PRIV_FLAGS_USES_UMP    = 0x00000002,
-		PRIV_FLAGS_USES_ION    = 0x00000004,
+		PRIV_FLAGS_FRAMEBUFFER                = 0x00000001,
+		PRIV_FLAGS_USES_ION_COMPOUND_HEAP     = 0x00000002,
+		PRIV_FLAGS_USES_ION                   = 0x00000004,
+		PRIV_FLAGS_USES_ION_DMA_HEAP          = 0x00000008
+
 	};
 
 	enum
 	{
-		LOCK_STATE_WRITE     =   1 << 31,
-		LOCK_STATE_MAPPED    =   1 << 30,
+		LOCK_STATE_WRITE     =   1<<31,
+		LOCK_STATE_MAPPED    =   1<<30,
 		LOCK_STATE_READ_MASK =   0x3FFFFFFF
 	};
 
@@ -143,7 +141,10 @@ struct private_handle_t
 	int     height;
 	int     format;
 	int     stride;
-	int     base;
+	union {
+		void*    base;
+		uint64_t padding;
+	};
 	int     lockState;
 	int     writeOwner;
 	int     pid;
@@ -188,7 +189,7 @@ struct private_handle_t
 	static const int sMagic = 0x3141592;
 
 #if GRALLOC_ARM_UMP_MODULE
-	private_handle_t(int _flags, int usage, int size, void *base, int lock_state, ump_secure_id secure_id, ump_handle handle):
+	private_handle_t(int flags, int usage, int size, int base, int lock_state, ump_secure_id secure_id, ump_handle handle):
 #if GRALLOC_ARM_DMA_BUF_MODULE
 		share_fd(-1),
 #endif
@@ -222,7 +223,7 @@ struct private_handle_t
 #endif
 
 #if GRALLOC_ARM_DMA_BUF_MODULE
-	private_handle_t(int flags, int usage, int size, int base, int lock_state):
+	private_handle_t(int flags, int usage, int size, void *base, int lock_state):
 		share_fd(-1),
 		magic(sMagic),
 		flags(flags),
@@ -253,7 +254,7 @@ struct private_handle_t
 
 #endif
 
-	private_handle_t(int flags, int usage, int size, int base, int lock_state, int fb_file, int fb_offset):
+	private_handle_t(int flags, int usage, int size, void *base, int lock_state, int fb_file, int fb_offset):
 #if GRALLOC_ARM_DMA_BUF_MODULE
 		share_fd(-1),
 #endif

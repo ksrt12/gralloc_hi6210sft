@@ -401,7 +401,7 @@ int init_frame_buffer_locked(struct private_module_t* module)
 	memset(vaddr, 0, fbSize);
 
 	// Create a "fake" buffer object for the entire frame buffer memory, and store it in the module
-+	module->framebuffer = new private_handle_t(private_handle_t::PRIV_FLAGS_FRAMEBUFFER, fbSize, vaddr,
++	module->framebuffer = new private_handle_t(private_handle_t::PRIV_FLAGS_FRAMEBUFFER, 0, fbSize, vaddr,
 +	                                           0, dup(fd), 0);
 
 	module->numBuffers = info.yres_virtual / info.yres;

@@ -47,6 +47,7 @@ LOCAL_CFLAGS := -DLOG_TAG=\"gralloc\" -DGRALLOC_32_BITS -DSTANDARD_LINUX_SCREEN 
 
 LOCAL_SRC_FILES := \
 	gralloc_module.cpp \
+	gralloc_module_ion.cpp \
 	alloc_device.cpp \
 	framebuffer_device.cpp
 

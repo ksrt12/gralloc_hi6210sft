@@ -571,11 +571,12 @@ static int alloc_device_close(struct hw_device_t *device)
 	return 0;
 }
 
-int alloc_device_open(hw_module_t const *module, const char *name, hw_device_t **device)
+int alloc_device_open(hw_module_t const* module, const char* name, hw_device_t** device)
 {
 	alloc_device_t *dev;
-    GRALLOC_UNUSED(name)
 
+	GRALLOC_UNUSED(name);
+ 
 	dev = new alloc_device_t;
 
 	if (NULL == dev)
@@ -601,13 +602,13 @@ int alloc_device_open(hw_module_t const *module, const char *name, hw_device_t *
 	/* initialize the procs */
 	dev->common.tag = HARDWARE_DEVICE_TAG;
 	dev->common.version = 0;
-	dev->common.module = const_cast<hw_module_t *>(module);
+	dev->common.module = const_cast<hw_module_t*>(module);
 	dev->common.close = alloc_device_close;
 	dev->alloc = alloc_device_alloc;
 	dev->free = alloc_device_free;
 
 #if GRALLOC_ARM_DMA_BUF_MODULE
-	private_module_t *m = reinterpret_cast<private_module_t *>(dev->common.module);
+	private_module_t* m = reinterpret_cast<private_module_t*>(dev->common.module);
 	m->ion_client = ion_open();
 
 	if (m->ion_client < 0)
