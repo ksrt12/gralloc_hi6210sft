@@ -24,8 +24,6 @@ include $(CLEAR_VARS)
 LOCAL_PRELINK_MODULE := false
 LOCAL_MODULE_RELATIVE_PATH := hw
 
-MALI_DDK_TEST_PATH := hardware/arm/
-
 ifeq ($(TARGET_BOARD_PLATFORM),)
 LOCAL_MODULE := gralloc.default
 else
@@ -33,15 +31,11 @@ LOCAL_MODULE := gralloc.$(TARGET_BOARD_PLATFORM)
 endif
 LOCAL_MODULE_TAGS := optional
 
-# Mali-200/300/400MP DDK
-MALI_DDK_PATH := $(LOCAL_PATH)/..
-#SHARED_MEM_LIBS := libUMP
+# Mali-200/300/400MP
 SHARED_MEM_LIBS := libion libhardware
-LOCAL_SHARED_LIBRARIES := liblog libcutils libGLESv1_CM $(SHARED_MEM_LIBS) #libMali
+LOCAL_SHARED_LIBRARIES := liblog libcutils libGLESv1_CM $(SHARED_MEM_LIBS)
 
 LOCAL_C_INCLUDES := system/core/include/ ../../../$(TARGET_KERNEL_SOURCE)/include 
-# Include the UMP header files
-LOCAL_C_INCLUDES += $(MALI_DDK_PATH)/src/ump/include 
 
 LOCAL_CFLAGS := -DLOG_TAG=\"gralloc\" -DGRALLOC_32_BITS -DSTANDARD_LINUX_SCREEN -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 
@@ -49,6 +43,7 @@ LOCAL_SRC_FILES := \
 	gralloc_module.cpp \
 	gralloc_module_ion.cpp \
 	alloc_device.cpp \
+	alloc_ion.cpp \
 	framebuffer_device.cpp
 
 #LOCAL_CFLAGS+= -DMALI_VSYNC_EVENT_REPORT_ENABLE

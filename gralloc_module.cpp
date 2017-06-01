@@ -137,16 +137,6 @@ static int gralloc_unregister_buffer(gralloc_module_t const* module, buffer_hand
 
 		if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
 		{
-#if GRALLOC_ARM_UMP_MODULE
-			ump_mapped_pointer_release((ump_handle)hnd->ump_mem_handle);
-			ump_reference_release((ump_handle)hnd->ump_mem_handle);
-			hnd->ump_mem_handle = (int)UMP_INVALID_MEMORY_HANDLE;
-#else
-			AERR("Can't unregister UMP buffer for handle %p. Not supported", handle);
-#endif
-		}
-		else if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
-		{
 #if GRALLOC_ARM_DMA_BUF_MODULE
 			void *base = (void*)hnd->base;
 			size_t size = hnd->size;
@@ -224,15 +214,7 @@ static int gralloc_unlock(gralloc_module_t const* module, buffer_handle_t handle
 	int32_t new_value;
 	int retry;
 
-	if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_UMP && hnd->writeOwner)
-	{
-#if GRALLOC_ARM_UMP_MODULE
-		ump_cpu_msync_now((ump_handle)hnd->ump_mem_handle, UMP_MSYNC_CLEAN_AND_INVALIDATE, (void*)hnd->base, hnd->size);
-#else
-		AERR("Buffer %p is UMP type but it is not supported", hnd);
-#endif
-	}
-	else if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION && hnd->writeOwner)
+	if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION && hnd->writeOwner)
 	{
 #if GRALLOC_ARM_DMA_BUF_MODULE
 		hw_module_t* pmodule = NULL;

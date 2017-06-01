@@ -42,6 +42,8 @@
 #include <ion/ion.h>
 #endif
 
+#include "alloc_device_allocator_specific.h"
+
 #define GRALLOC_ALIGN( value, base ) (((value) + ((base) - 1)) & ~((base) - 1))
 
 
@@ -172,81 +174,6 @@ static int gralloc_alloc_buffer(alloc_device_t *dev, size_t size, int usage, buf
 			AERR("ion_free( %d ) failed", m->ion_client);
 		}
 
-		return -1;
-	}
-#endif
-
-#if GRALLOC_ARM_UMP_MODULE
-	{
-		ump_handle ump_mem_handle;
-		void *cpu_ptr;
-		ump_secure_id ump_id;
-		ump_alloc_constraints constraints;
-
-		size = round_up_to_page_size(size);
-
-		if ((usage & GRALLOC_USAGE_SW_READ_MASK) == GRALLOC_USAGE_SW_READ_OFTEN)
-		{
-			constraints =  UMP_REF_DRV_CONSTRAINT_USE_CACHE;
-		}
-		else
-		{
-			constraints = UMP_REF_DRV_CONSTRAINT_NONE;
-		}
-
-#ifdef GRALLOC_SIMULATE_FAILURES
-		/* if the failure condition matches, fail this iteration */
-		if (__ump_alloc_should_fail())
-		{
-			ump_mem_handle = UMP_INVALID_MEMORY_HANDLE;
-		}
-		else
-#endif
-		{
-			ump_mem_handle = ump_ref_drv_allocate(size, constraints);
-
-			if (UMP_INVALID_MEMORY_HANDLE != ump_mem_handle)
-			{
-				cpu_ptr = ump_mapped_pointer_get(ump_mem_handle);
-
-				if (NULL != cpu_ptr)
-				{
-					ump_id = ump_secure_id_get(ump_mem_handle);
-
-					if (UMP_INVALID_SECURE_ID != ump_id)
-					{
-						private_handle_t *hnd = new private_handle_t(private_handle_t::PRIV_FLAGS_USES_UMP, usage, size, (int)cpu_ptr,
-						private_handle_t::LOCK_STATE_MAPPED, ump_id, ump_mem_handle);
-
-						if (NULL != hnd)
-						{
-							*pHandle = hnd;
-							return 0;
-						}
-						else
-						{
-							AERR("gralloc_alloc_buffer() failed to allocate handle. ump_handle = %p, ump_id = %d", ump_mem_handle, ump_id);
-						}
-					}
-					else
-					{
-						AERR("gralloc_alloc_buffer() failed to retrieve valid secure id. ump_handle = %p", ump_mem_handle);
-					}
-
-					ump_mapped_pointer_release(ump_mem_handle);
-				}
-				else
-				{
-					AERR("gralloc_alloc_buffer() failed to map UMP memory. ump_handle = %p", ump_mem_handle);
-				}
-
-				ump_reference_release(ump_mem_handle);
-			}
-			else
-			{
-				AERR("gralloc_alloc_buffer() failed to allocate UMP memory. size:%d constraints: %d", size, constraints);
-			}
-		}
 		return -1;
 	}
 #endif
@@ -496,21 +423,6 @@ static int alloc_device_free(alloc_device_t *dev, buffer_handle_t handle)
 			ump_reference_release((ump_handle)hnd->ump_mem_handle);
 		}
 
-#endif
-	}
-	else if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_UMP)
-	{
-#if GRALLOC_ARM_UMP_MODULE
-
-		/* Buffer might be unregistered so we need to check for invalid ump handle*/
-		if ((int)UMP_INVALID_MEMORY_HANDLE != hnd->ump_mem_handle)
-		{
-			ump_mapped_pointer_release((ump_handle)hnd->ump_mem_handle);
-			ump_reference_release((ump_handle)hnd->ump_mem_handle);
-		}
-
-#else
-		AERR("Can't free ump memory for handle:0x%x. Not supported.", (unsigned int)hnd);
 #endif
 	}
 	else if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
