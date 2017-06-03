@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/fb.h>
+#include <stdlib.h>
 
 #include <cutils/log.h>
 #include <cutils/atomic.h>
@@ -85,7 +86,7 @@ static int fb_post(struct framebuffer_device_t *dev, buffer_handle_t buffer)
 		m->base.lock(&m->base, buffer, private_module_t::PRIV_USAGE_LOCKED_FOR_POST,
 		             0, 0, m->info.xres, m->info.yres, NULL);
 
-		const size_t offset = hnd->base - m->framebuffer->base;
+		const size_t offset = (uintptr_t)hnd->base - (uintptr_t)m->framebuffer->base;
 		int interrupt;
 		m->info.activate = FB_ACTIVATE_VBL;
 		m->info.yoffset = offset / m->finfo.line_length;
@@ -382,7 +383,7 @@ int init_frame_buffer_locked(struct private_module_t *module)
 	memset(vaddr, 0, fbSize);
 
 	// Create a "fake" buffer object for the entire frame buffer memory, and store it in the module
-	module->framebuffer = new private_handle_t(private_handle_t::PRIV_FLAGS_FRAMEBUFFER, 0, fbSize, intptr_t(vaddr),
+	module->framebuffer = new private_handle_t(private_handle_t::PRIV_FLAGS_FRAMEBUFFER, 0, fbSize, vaddr,
 	        0, dup(fd), 0);
 
 	module->numBuffers = info.yres_virtual / info.yres;
@@ -428,6 +429,7 @@ static int fb_close(struct hw_device_t *device)
 
 int compositionComplete(struct framebuffer_device_t *dev)
 {
+	MALI_IGNORE(dev);
 	/* By doing a finish here we force the GL driver to start rendering
 	   all the drawcalls up to this point, and to wait for the rendering to be complete.*/
 	glFinish();
@@ -447,6 +449,7 @@ int compositionComplete(struct framebuffer_device_t *dev)
 
 int framebuffer_device_open(hw_module_t const *module, const char *name, hw_device_t **device)
 {
+	MALI_IGNORE(name);
 	int status = -EINVAL;
 
 	alloc_device_t *gralloc_device;
@@ -467,7 +470,7 @@ int framebuffer_device_open(hw_module_t const *module, const char *name, hw_devi
 	}
 
 	/* initialize our state here */
-	framebuffer_device_t *dev = new framebuffer_device_t();
+	framebuffer_device_t *dev = (framebuffer_device_t *)malloc(sizeof(framebuffer_device_t));
 	memset(dev, 0, sizeof(*dev));
 
 	/* initialize the procs */

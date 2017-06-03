@@ -32,7 +32,6 @@ endif
 LOCAL_MODULE_TAGS := optional
 
 # Mali-200/300/400MP DDK
-MALI_DDK_PATH := hardware/arm/mali
 SHARED_MEM_LIBS := libion libhardware
 LOCAL_SHARED_LIBRARIES := liblog libcutils libGLESv1_CM $(SHARED_MEM_LIBS)
 
